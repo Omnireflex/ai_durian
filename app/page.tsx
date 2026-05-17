@@ -333,11 +333,11 @@ export default function Home() {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#E7D7A9] bg-[#FFF9E8] px-5 py-5 text-center transition hover:border-[#F8C537]">
-                    <span className="text-base font-extrabold text-[#2E5E3E]">从相册选择</span>
-                    <span className="mt-1 text-xs text-[#8E6512]">推荐用已拍好的清晰照片</span>
+                    <span className="text-base font-extrabold text-[#2E5E3E]">从手机相册/文件选择</span>
+                    <span className="mt-1 text-xs text-[#8E6512]">不打开相机，选择已有照片</span>
                     <input
                       type="file"
-                      accept="image/jpeg,image/png,image/webp"
+                      accept="image/*"
                       className="hidden"
                       onChange={(event) => onUploadCurrentStep(event.target.files?.[0] ?? null)}
                     />
@@ -350,7 +350,7 @@ export default function Home() {
                     <span className="mt-1 text-xs text-[#8E6512]">打开后置摄像头拍这一张</span>
                     <input
                       type="file"
-                      accept="image/jpeg,image/png,image/webp"
+                      accept="image/*"
                       capture="environment"
                       className="hidden"
                       onChange={(event) => onUploadCurrentStep(event.target.files?.[0] ?? null)}
