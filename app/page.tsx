@@ -331,19 +331,34 @@ export default function Home() {
                   </ul>
                 </div>
 
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#E7D7A9] bg-[#FFF9E8] px-5 py-6 text-center transition hover:border-[#F8C537]">
-                  <span className="text-base font-extrabold text-[#2E5E3E]">
-                    {stepImages[currentStep.key] ? "重新上传这一张" : "拍照或上传这一张"}
-                  </span>
-                  <span className="mt-1 text-xs text-[#8E6512]">支持 JPG / PNG / WEBP，单张小于 5MB</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    capture="environment"
-                    className="hidden"
-                    onChange={(event) => onUploadCurrentStep(event.target.files?.[0] ?? null)}
-                  />
-                </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#E7D7A9] bg-[#FFF9E8] px-5 py-5 text-center transition hover:border-[#F8C537]">
+                    <span className="text-base font-extrabold text-[#2E5E3E]">从相册选择</span>
+                    <span className="mt-1 text-xs text-[#8E6512]">推荐用已拍好的清晰照片</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(event) => onUploadCurrentStep(event.target.files?.[0] ?? null)}
+                    />
+                  </label>
+
+                  <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-[#E7D7A9] bg-white px-5 py-5 text-center transition hover:border-[#F8C537]">
+                    <span className="text-base font-extrabold text-[#2E5E3E]">
+                      {stepImages[currentStep.key] ? "重新拍照" : "现场拍照"}
+                    </span>
+                    <span className="mt-1 text-xs text-[#8E6512]">打开后置摄像头拍这一张</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(event) => onUploadCurrentStep(event.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
+
+                <p className="text-center text-xs text-[#777777]">支持 JPG / PNG / WEBP，单张小于 5MB</p>
 
                 {stepImages[currentStep.key] ? (
                   <div className="space-y-2">
