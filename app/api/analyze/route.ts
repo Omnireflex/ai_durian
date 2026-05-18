@@ -145,7 +145,9 @@ export async function POST(request: Request) {
           });
 
     const analysisId = crypto.randomUUID();
-    const adjustedResult = adjustRecommendation(result);
+    const adjustedResult = adjustRecommendation(result, {
+      missingCorePhotoCount: missingPhotos.length,
+    });
     const finalResult = {
       ...adjustedResult,
       missingPhotos:

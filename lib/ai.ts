@@ -82,12 +82,12 @@ JSON 格式如下：
   "recommendation": "buy | caution | avoid | insufficient_info",
   "summary": "一句简洁总结",
   "scores": {
-    "ripeness": 0,
-    "freshness": 0,
-    "estimatedYield": 0,
-    "defectRisk": 0,
-    "preferenceMatch": 0,
-    "overall": 0
+    "ripeness": <0-100 整数>,
+    "freshness": <0-100 整数>,
+    "estimatedYield": <0-100 整数>,
+    "defectRisk": <0-100 整数>,
+    "preferenceMatch": <0-100 整数>,
+    "overall": <0-100 整数>
   },
   "labels": {
     "ripenessStage": "unripe | almost_ready | ready | overripe_risk | unknown",
@@ -112,13 +112,26 @@ JSON 格式如下：
   "confidence": "low | medium | high"
 }
 
-评分规则：
-- ripeness 越高代表越接近适合食用，不代表越熟越好；
-- freshness 越高代表越新鲜；
+评分规则（请严格遵守）：
+- 所有分数都是 0 到 100 的整数（百分制）；
+- 严禁使用 10 分制、5 分制或 0~1 小数评分；例如普通新鲜程度应输出 60-80 之间的整数，绝不能输出 6、7、8 或 0.7；
+- 一颗状态正常、没有明显瑕疵的榴莲，应给出 60 以上的分数，不要因为"看不出甜度"就把所有分都压到个位数；
+- ripeness 越高代表越接近“适合现在食用”，并不代表“越熟越好”；过熟应给中低分；
+- freshness 越高代表越新鲜；果柄干枯、脱水、明显发黑的应显著扣分；
 - estimatedYield 越高代表预估出肉率越好；
-- defectRisk 越高代表坏果风险越高；
+- defectRisk 越高代表坏果风险越高（这是一个反向指标）；
 - preferenceMatch 越高代表越符合用户偏好；
-- overall 是综合购买价值评分。`;
+- overall 必须近似按以下权重综合给出，不要随意拍脑袋：
+  overall ≈ freshness * 0.25
+          + (100 - defectRisk) * 0.25
+          + estimatedYield * 0.20
+          + ripeness * 0.18
+          + preferenceMatch * 0.12
+- 一致性要求：
+  · 如果 defectRiskLevel 是 high，defectRisk 必须 ≥ 70；
+  · 如果 freshnessLevel 是 low，freshness 必须 ≤ 40；
+  · 如果 ripenessStage 是 overripe_risk，ripeness 不能高于 65；
+  · 如果你判断信息不足以给出稳定结论，请把 confidence 置为 low，不要给一组中等分数糊弄过去。`;
 
 function getEnv(name: string): string | undefined {
   const value = process.env[name];
@@ -143,11 +156,56 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && (error.name === "AbortError" || error.message.includes("AI_ANALYZE_TIMEOUT"));
 }
 
-function clampScore(value: unknown): number {
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function toFiniteNumber(value: unknown): number {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  const normalized = parsed >= 0 && parsed <= 1 ? parsed * 100 : parsed;
-  return Math.max(0, Math.min(100, Math.round(normalized)));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function detectScoreScale(values: number[]): number {
+  const nonZero = values.filter((value) => value > 0);
+  if (nonZero.length === 0) return 1;
+  const max = Math.max(...nonZero);
+  if (max <= 1) return 100;
+  if (max <= 10) return 10;
+  return 1;
+}
+
+function normalizeScoreGroup(raw: Record<string, unknown>): {
+  ripeness: number;
+  freshness: number;
+  estimatedYield: number;
+  defectRisk: number;
+  preferenceMatch: number;
+  overall: number;
+} {
+  const ripeness = toFiniteNumber(raw.ripeness);
+  const freshness = toFiniteNumber(raw.freshness);
+  const estimatedYield = toFiniteNumber(raw.estimatedYield);
+  const defectRisk = toFiniteNumber(raw.defectRisk);
+  const preferenceMatch = toFiniteNumber(raw.preferenceMatch);
+  const overall = toFiniteNumber(raw.overall);
+
+  const scale = detectScoreScale([
+    ripeness,
+    freshness,
+    estimatedYield,
+    defectRisk,
+    preferenceMatch,
+    overall,
+  ]);
+
+  return {
+    ripeness: clampPercent(ripeness * scale),
+    freshness: clampPercent(freshness * scale),
+    estimatedYield: clampPercent(estimatedYield * scale),
+    defectRisk: clampPercent(defectRisk * scale),
+    preferenceMatch: clampPercent(preferenceMatch * scale),
+    overall: clampPercent(overall * scale),
+  };
 }
 
 function pickEnum<T extends string>(value: unknown, options: readonly T[], fallback: T): T {
@@ -206,14 +264,7 @@ function normalizeAnalysisResult(input: unknown): AnalysisResult {
       typeof source.summary === "string" && source.summary.trim()
         ? source.summary.trim()
         : "暂未形成稳定结论，建议补充更多清晰图片。",
-    scores: {
-      ripeness: clampScore(scores.ripeness),
-      freshness: clampScore(scores.freshness),
-      estimatedYield: clampScore(scores.estimatedYield),
-      defectRisk: clampScore(scores.defectRisk),
-      preferenceMatch: clampScore(scores.preferenceMatch),
-      overall: clampScore(scores.overall),
-    },
+    scores: normalizeScoreGroup(scores),
     labels: {
       ripenessStage: pickEnum(
         labels.ripenessStage,
