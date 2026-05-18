@@ -1,5 +1,5 @@
 export const SUPPORTED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
-export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_SIZE_BYTES = 650 * 1024;
 export const MAX_IMAGE_COUNT = 6;
 export const MIN_IMAGE_COUNT = 3;
 
@@ -18,7 +18,7 @@ export function validateImages(files: File[]): string | null {
     }
 
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      return "图片太大：请上传小于 5MB 的图片。";
+      return "图片太大：请上传小于 650KB 的图片。";
     }
   }
 

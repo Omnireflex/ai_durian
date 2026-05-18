@@ -93,11 +93,76 @@ const wizardSteps: WizardStep[] = [
 ];
 
 const COMMON_DURIAN_VARIETIES = ["金枕", "猫山王", "苏丹王", "黑刺", "干尧", "D24", "XO", "红虾", "青尼", "不确定"];
+const MAX_SOURCE_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_COMPRESSED_IMAGE_EDGE = 1280;
+const COMPRESSED_IMAGE_QUALITIES = [0.68, 0.58, 0.48];
+const MAX_TOTAL_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 function optionCardClass(selected: boolean): string {
   return selected
     ? "rounded-xl border border-[#F8C537] bg-[#FFF9E8] px-3 py-3 text-left text-sm text-[#2E5E3E]"
     : "rounded-xl border border-[#E5E5E5] bg-white px-3 py-3 text-left text-sm text-[#222222]";
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("图片读取失败：请换一张 JPG、PNG 或 WEBP 照片。"));
+    };
+    image.src = url;
+  });
+}
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("图片格式不支持：请上传 JPG、PNG 或 WEBP。");
+  }
+
+  if (file.size > MAX_SOURCE_IMAGE_SIZE_BYTES) {
+    throw new Error("图片太大：请先在相册里压缩后再上传。");
+  }
+
+  const image = await loadImageFromFile(file);
+  const scale = Math.min(1, MAX_COMPRESSED_IMAGE_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("图片处理失败：当前浏览器不支持图片压缩。");
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+
+  let lastBlob: Blob | null = null;
+  for (const quality of COMPRESSED_IMAGE_QUALITIES) {
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", quality);
+    });
+    if (!blob) {
+      continue;
+    }
+    lastBlob = blob;
+    if (blob.size <= MAX_IMAGE_SIZE_BYTES) {
+      break;
+    }
+  }
+
+  if (!lastBlob) {
+    throw new Error("图片处理失败：请换一张照片再试。");
+  }
+
+  const name = file.name.replace(/\.[^.]+$/, "") || "durian-photo";
+  return new File([lastBlob], `${name}.jpg`, { type: "image/jpeg" });
 }
 
 export default function Home() {
@@ -152,42 +217,44 @@ export default function Home() {
     return "AI 正在看这颗榴莲...";
   }, [pageState]);
 
-  const onUploadCurrentStep = (file: File | null) => {
+  const onUploadCurrentStep = async (file: File | null) => {
     if (!currentStep) return;
     if (!file) return;
-    if (!SUPPORTED_IMAGE_MIME_TYPES.includes(file.type)) {
-      setError("图片格式不支持：请上传 JPG、PNG 或 WEBP。");
-      setPageState("error");
-      return;
-    }
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      setError("图片太大：请上传小于 5MB 的图片。");
-      setPageState("error");
-      return;
-    }
     if (allUploadedImages.length >= MAX_IMAGE_COUNT && !stepImages[currentStep.key]) {
       setError(`最多可上传 ${MAX_IMAGE_COUNT} 张图片。`);
       setPageState("error");
       return;
     }
 
-    const old = stepImages[currentStep.key];
-    if (old) {
-      URL.revokeObjectURL(old.previewUrl);
-    }
-
-    setStepImages((prev) => ({
-      ...prev,
-      [currentStep.key]: {
-        id: crypto.randomUUID(),
-        file,
-        previewUrl: URL.createObjectURL(file),
-        type: STEP_IMAGE_TYPES[currentStep.key],
-      },
-    }));
-    if (pageState === "error") {
-      setPageState("idle");
+    try {
       setError(null);
+      setPageState("uploading");
+      const compressedFile = await compressImageForUpload(file);
+      if (!SUPPORTED_IMAGE_MIME_TYPES.includes(compressedFile.type)) {
+        throw new Error("图片格式不支持：请上传 JPG、PNG 或 WEBP。");
+      }
+      if (compressedFile.size > MAX_IMAGE_SIZE_BYTES) {
+        throw new Error("图片太大：请换一张更小的照片。");
+      }
+
+      const old = stepImages[currentStep.key];
+      if (old) {
+        URL.revokeObjectURL(old.previewUrl);
+      }
+
+      setStepImages((prev) => ({
+        ...prev,
+        [currentStep.key]: {
+          id: crypto.randomUUID(),
+          file: compressedFile,
+          previewUrl: URL.createObjectURL(compressedFile),
+          type: STEP_IMAGE_TYPES[currentStep.key],
+        },
+      }));
+      setPageState("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "图片处理失败，请换一张照片再试。");
+      setPageState("error");
     }
   };
 
@@ -206,6 +273,10 @@ export default function Home() {
       setError(null);
       setPageState("uploading");
       const formData = new FormData();
+      const totalImageBytes = allUploadedImages.reduce((total, image) => total + image.file.size, 0);
+      if (totalImageBytes > MAX_TOTAL_UPLOAD_BYTES) {
+        throw new Error("上传照片总大小仍然偏大，请减少可选照片或换更小的照片。");
+      }
       for (const image of allUploadedImages) {
         formData.append("images[]", image.file);
         formData.append("imageTypes[]", image.type);
@@ -227,7 +298,16 @@ export default function Home() {
         body: formData,
       });
 
-      const payload = (await response.json()) as AnalyzeSuccessResponse | ApiErrorResponse;
+      const contentType = response.headers.get("content-type") ?? "";
+      const payload = contentType.includes("application/json")
+        ? ((await response.json()) as AnalyzeSuccessResponse | ApiErrorResponse)
+        : ({
+            success: false,
+            message:
+              response.status === 413
+                ? "上传图片总大小超过线上服务限制，请减少照片数量或换更小的照片。"
+                : "服务器返回了非 JSON 错误，请稍后重试。",
+          } satisfies ApiErrorResponse);
       if (!response.ok || !("success" in payload) || !payload.success) {
         throw new Error("message" in payload ? payload.message : "这次没有分析成功，请换几张更清晰的照片再试一次。");
       }
