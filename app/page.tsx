@@ -94,10 +94,10 @@ const wizardSteps: WizardStep[] = [
 
 const COMMON_DURIAN_VARIETIES = ["金枕", "猫山王", "苏丹王", "黑刺", "干尧", "D24", "XO", "红虾", "青尼", "不确定"];
 const MAX_SOURCE_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
-const MAX_COMPRESSED_IMAGE_EDGE = 1280;
-const COMPRESSED_IMAGE_QUALITIES = [0.68, 0.58, 0.48];
-const MAX_TOTAL_UPLOAD_BYTES = 4 * 1024 * 1024;
-const ANALYZE_CLIENT_TIMEOUT_MS = 75_000;
+const MAX_COMPRESSED_IMAGE_EDGE = 1024;
+const COMPRESSED_IMAGE_QUALITIES = [0.62, 0.52, 0.42];
+const MAX_TOTAL_UPLOAD_BYTES = 3.2 * 1024 * 1024;
+const ANALYZE_CLIENT_TIMEOUT_MS = 190_000;
 
 function optionCardClass(selected: boolean): string {
   return selected
@@ -215,7 +215,7 @@ export default function Home() {
     if (pageState === "uploading") {
       return "正在处理图片...";
     }
-    return "AI 正在看这颗榴莲，通常需要 20-60 秒...";
+    return "AI 正在看这颗榴莲，复杂模型可能需要 1-3 分钟...";
   }, [pageState]);
 
   const onUploadCurrentStep = async (file: File | null) => {
@@ -323,7 +323,7 @@ export default function Home() {
     } catch (caught) {
       const message =
         caught instanceof Error && caught.name === "AbortError"
-          ? "AI 分析超过 75 秒仍未返回，可能是模型排队或图片太多。请减少照片数量后重试。"
+          ? "AI 分析超过 190 秒仍未返回，可能是模型排队或图片太多。请减少照片数量后重试。"
           : caught instanceof Error
             ? caught.message
             : "这次没有分析成功，请换几张更清晰的照片再试一次。";

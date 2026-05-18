@@ -13,7 +13,7 @@ import type {
   WeightFeelingType,
 } from "@/types/durian";
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 function toStringValue(value: FormDataEntryValue | null): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;

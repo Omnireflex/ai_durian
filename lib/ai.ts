@@ -34,7 +34,7 @@ type OpenAIChatResponse = {
   };
 };
 
-const AI_REQUEST_TIMEOUT_MS = 55_000;
+const AI_REQUEST_TIMEOUT_MS = 170_000;
 
 const SYSTEM_PROMPT = `你是一名经验丰富的榴莲挑选顾问，目标是根据图片和用户补充信息，帮助用户判断这颗榴莲是否值得购买。
 
@@ -329,7 +329,7 @@ export async function analyzeDurianWithAI(input: AnalyzeWithAIInput): Promise<An
         });
       } catch (error) {
         if (isAbortError(error)) {
-          throw new Error("AI 分析超时：模型超过 55 秒仍未返回，请稍后重试或减少照片数量。");
+          throw new Error("AI 分析超时：模型超过 170 秒仍未返回，请稍后重试或减少照片数量。");
         }
         throw error;
       }
