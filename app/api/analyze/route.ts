@@ -13,8 +13,19 @@ import type {
   WeightFeelingType,
 } from "@/types/durian";
 
+export const maxDuration = 60;
+
 function toStringValue(value: FormDataEntryValue | null): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function publicErrorMessage(error: unknown, debug: boolean): string {
+  const fallback = "分析失败：AI 暂时没有成功读取图片，请重新上传更清晰的照片。";
+  if (!(error instanceof Error)) return fallback;
+  if (error.message.includes("超时") || error.name === "AbortError") {
+    return "AI 分析超时：模型响应太慢，请减少照片数量或稍后重试。";
+  }
+  return debug ? error.message : fallback;
 }
 
 function deriveMissingPhotos(imageTypes: DurianImageType[]): string[] {
@@ -152,11 +163,10 @@ export async function POST(request: Request) {
     return NextResponse.json(response);
   } catch (error) {
     console.error(`[analyze:${requestId}] failed`, error);
-    const message = error instanceof Error ? error.message : "分析失败：AI 暂时没有成功读取图片，请重新上传更清晰的照片。";
     return NextResponse.json<ApiErrorResponse>(
       {
         success: false,
-        message: debug ? message : "分析失败：AI 暂时没有成功读取图片，请重新上传更清晰的照片。",
+        message: publicErrorMessage(error, debug),
       },
       { status: 500 },
     );

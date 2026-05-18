@@ -97,6 +97,7 @@ const MAX_SOURCE_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_COMPRESSED_IMAGE_EDGE = 1280;
 const COMPRESSED_IMAGE_QUALITIES = [0.68, 0.58, 0.48];
 const MAX_TOTAL_UPLOAD_BYTES = 4 * 1024 * 1024;
+const ANALYZE_CLIENT_TIMEOUT_MS = 75_000;
 
 function optionCardClass(selected: boolean): string {
   return selected
@@ -214,7 +215,7 @@ export default function Home() {
     if (pageState === "uploading") {
       return "正在处理图片...";
     }
-    return "AI 正在看这颗榴莲...";
+    return "AI 正在看这颗榴莲，通常需要 20-60 秒...";
   }, [pageState]);
 
   const onUploadCurrentStep = async (file: File | null) => {
@@ -293,10 +294,14 @@ export default function Home() {
       formData.append("tastePreference", formValues.tastePreference);
 
       setPageState("analyzing");
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), ANALYZE_CLIENT_TIMEOUT_MS);
       const response = await fetch("/api/analyze", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+      window.clearTimeout(timeout);
 
       const contentType = response.headers.get("content-type") ?? "";
       const payload = contentType.includes("application/json")
@@ -316,7 +321,13 @@ export default function Home() {
       setPageState("result");
       setShowWizard(false);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "这次没有分析成功，请换几张更清晰的照片再试一次。");
+      const message =
+        caught instanceof Error && caught.name === "AbortError"
+          ? "AI 分析超过 75 秒仍未返回，可能是模型排队或图片太多。请减少照片数量后重试。"
+          : caught instanceof Error
+            ? caught.message
+            : "这次没有分析成功，请换几张更清晰的照片再试一次。";
+      setError(message);
       setPageState("error");
     }
   };

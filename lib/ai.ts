@@ -34,6 +34,8 @@ type OpenAIChatResponse = {
   };
 };
 
+const AI_REQUEST_TIMEOUT_MS = 55_000;
+
 const SYSTEM_PROMPT = `你是一名经验丰富的榴莲挑选顾问，目标是根据图片和用户补充信息，帮助用户判断这颗榴莲是否值得购买。
 
 你必须保持谨慎，不要假装能从图片中确定榴莲内部的甜度、香味和肉质。你只能根据外观特征和用户提供的信息进行概率判断。
@@ -135,6 +137,10 @@ function logDebug(requestId: string, message: string, extra?: Record<string, unk
     return;
   }
   console.log(`[analyze:${requestId}] ${message}`);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === "AbortError" || error.message.includes("AI_ANALYZE_TIMEOUT"));
 }
 
 function clampScore(value: unknown): number {
@@ -250,7 +256,7 @@ export async function analyzeDurianWithAI(input: AnalyzeWithAIInput): Promise<An
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
+  const timeout = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
 
   try {
     logDebug(requestId, "start ai analyze", {
@@ -310,15 +316,23 @@ export async function analyzeDurianWithAI(input: AnalyzeWithAIInput): Promise<An
         withResponseFormat,
       });
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        signal: controller.signal,
-        body: JSON.stringify(body),
-      });
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        });
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw new Error("AI 分析超时：模型超过 55 秒仍未返回，请稍后重试或减少照片数量。");
+        }
+        throw error;
+      }
 
       const payload = (await response.json()) as OpenAIChatResponse;
       logDebug(requestId, "ai endpoint returned", {
